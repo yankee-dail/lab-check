@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="uk">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Тест з лабораторної</title>
+  <link rel="stylesheet" href="/styles.css">
+  <script src="/guard.js"></script>
+</head>
+<body class="noselect strict">
+  <div class="wrap" id="app">
+    <div class="card center"><div class="spinner"></div>Завантаження…</div>
+  </div>
+
+  <div class="overlay" id="fsOverlay">
+    <div class="box">
+      <h2>Тест доступний лише у повноекранному режимі</h2>
+      <p>Вихід із повноекранного режиму зафіксовано як порушення. Таймер питання продовжує йти.</p>
+      <p id="fsViol"></p>
+      <button class="btn" id="fsBack">Повернутися в повноекранний режим</button>
+    </div>
+  </div>
+
+  <script src="/test.js"></script>
+</body>
+</html>

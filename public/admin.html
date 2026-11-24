@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="uk">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Кабінет викладача</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <div class="wrap wide">
+    <div class="between">
+      <h1>Кабінет викладача</h1>
+      <button class="btn secondary small" id="logout" hidden>Вийти</button>
+    </div>
+
+    <form class="card" id="login" style="max-width:420px">
+      <label for="pw">Пароль</label>
+      <input type="password" id="pw" autocomplete="current-password" required>
+      <button class="btn block">Увійти</button>
+      <div class="error" id="loginErr"></div>
+    </form>
+
+    <div id="main" hidden>
+      <p class="muted small" id="mailInfo"></p>
+      <div class="tabs">
+        <button class="btn small active" data-tab="attempts">Результати</button>
+        <button class="btn small secondary" data-tab="labs">Лабораторні</button>
+      </div>
+      <div id="tab-attempts"></div>
+      <div id="tab-labs" hidden></div>
+    </div>
+  </div>
+  <script src="/admin.js"></script>
+</body>
+</html>

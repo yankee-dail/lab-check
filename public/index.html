@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="uk">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Захист лабораторної</title>
+  <link rel="stylesheet" href="/styles.css">
+  <script src="/guard.js"></script>
+</head>
+<body class="noselect">
+  <div class="wrap">
+    <h1>Захист лабораторної роботи</h1>
+    <p class="muted">Завантаж свою роботу — система складе тест із питань саме по твоєму коду і звіту.</p>
+
+    <div class="card" id="mobile" hidden>
+      <div class="notice">Тест можна пройти лише на комп'ютері або ноутбуці в повноекранному режимі. Відкрий цю сторінку з комп'ютера.</div>
+    </div>
+
+    <form class="card" id="form">
+      <label for="lab">Лабораторна</label>
+      <select id="lab" required><option value="">Завантаження…</option></select>
+      <p class="muted small" id="labdesc" style="margin-top:8px"></p>
+
+      <div class="row">
+        <div>
+          <label for="name">Прізвище та ім'я</label>
+          <input type="text" id="name" required maxlength="120" autocomplete="name" placeholder="Шевченко Тарас">
+        </div>
+        <div>
+          <label for="group">Група</label>
+          <input type="text" id="group" maxlength="40" placeholder="КН-21">
+        </div>
+      </div>
+
+      <label>Файли роботи</label>
+      <div class="drop" id="drop">
+        Перетягни сюди файли або <b>натисни, щоб вибрати</b><br>
+        <span class="small">Код (будь-яка мова), .zip з проєктом, звіт .pdf / .docx. До 25 МБ на файл.</span>
+      </div>
+      <input type="file" id="file" multiple hidden>
+      <ul class="files" id="files"></ul>
+
+      <div class="card notice" style="margin-top:20px">
+        <b>Правила тесту</b>
+        <ul class="rules" id="rules">
+          <li>Тест проходить лише у повноекранному режимі.</li>
+          <li>На кожне питання — обмежений час, повернутися назад не можна.</li>
+          <li>Перехід на іншу вкладку, вікно чи вихід із повноекранного режиму фіксується. Після кількох порушень тест закривається.</li>
+          <li>Результат і журнал дій надсилаються викладачу.</li>
+        </ul>
+      </div>
+
+      <button class="btn block" id="submit" type="submit">Завантажити і перейти до тесту</button>
+      <div class="error" id="err"></div>
+    </form>
+  </div>
+
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const files = [];
+  let labs = [];
+
+  const touchOnly = matchMedia("(pointer: coarse)").matches && !matchMedia("(pointer: fine)").matches;
+  if (!document.documentElement.requestFullscreen || touchOnly) {
+    $("mobile").hidden = false;
+    $("form").hidden = true;
+  }
+
+  fetch("/api/labs").then(r => r.json()).then(list => {
+    labs = list;
+    const params = new URLSearchParams(location.search);
+    $("lab").innerHTML = list.length
+      ? '<option value="">— оберіть —</option>' + list.map(l => `<option value="${l.id}">${esc(l.title)}</option>`).join("")
+      : '<option value="">Немає відкритих лабораторних</option>';
+    if (params.get("lab")) $("lab").value = params.get("lab");
+    showLab();
+  });
+
+  function esc(s) { return String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]); }
+
+  function showLab() {
+    const l = labs.find(x => String(x.id) === $("lab").value);
+    $("labdesc").textContent = l ? (l.description || "") : "";
+    if (l) {
+      $("rules").innerHTML = `
+        <li>${l.question_count} питань з 4 варіантами, по <b>${l.seconds_per_question} секунд</b> на кожне. Повернутися назад не можна.</li>
+        <li>Тест проходить лише у <b>повноекранному режимі</b>.</li>
+        <li>Перехід на іншу вкладку, вікно чи вихід із повноекранного режиму — порушення. Після <b>${l.max_violations}</b> порушень тест закривається.</li>
+        <li>Копіювати текст сторінки не можна. Результат і журнал дій надсилаються викладачу.</li>`;
+    }
+  }
+  $("lab").addEventListener("change", showLab);
+
+  const drop = $("drop");
+  drop.addEventListener("click", () => $("file").click());
+  $("file").addEventListener("change", (e) => { addFiles(e.target.files); e.target.value = ""; });
+  drop.addEventListener("dragover", (e) => { e.preventDefault(); drop.classList.add("over"); });
+  drop.addEventListener("dragleave", () => drop.classList.remove("over"));
+  drop.addEventListener("drop", (e) => { e.preventDefault(); drop.classList.remove("over"); addFiles(e.dataTransfer.files); });
+
+  function addFiles(list) {
+    for (const f of list) if (!files.some(x => x.name === f.name && x.size === f.size)) files.push(f);
+    render();
+  }
+  function render() {
+    $("files").innerHTML = files.map((f, i) =>
+      `<li><span>${esc(f.name)} <span class="muted">(${(f.size / 1024).toFixed(0)} КБ)</span></span><button type="button" data-i="${i}">прибрати</button></li>`).join("");
+  }
+  $("files").addEventListener("click", (e) => {
+    if (e.target.dataset.i != null) { files.splice(Number(e.target.dataset.i), 1); render(); }
+  });
+
+  $("form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    $("err").textContent = "";
+    if (!$("lab").value) return ($("err").textContent = "Оберіть лабораторну");
+    if (!files.length) return ($("err").textContent = "Додайте файли роботи");
+    const fd = new FormData();
+    fd.append("labId", $("lab").value);
+    fd.append("name", $("name").value);
+    fd.append("group", $("group").value);
+    files.forEach(f => fd.append("files", f, f.name));
+    $("submit").disabled = true;
+    $("submit").textContent = "Завантаження…";
+    try {
+      const r = await fetch("/api/attempts", { method: "POST", body: fd });
+      const data = await r.json();
+      if (!r.ok) throw new Error(data.error || "Помилка");
+      location.href = "/test#" + data.token;
+    } catch (err) {
+      $("err").textContent = err.message;
+      $("submit").disabled = false;
+      $("submit").textContent = "Завантажити і перейти до тесту";
+    }
+  });
+})();
+</script>
+</body>
+</html>
