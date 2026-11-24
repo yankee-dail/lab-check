@@ -14,11 +14,10 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^1.13.0",
-    "adm-zip": "^0.5.16",
+    "adm-zip": "^0.6.1",
     "express": "^4.21.2",
     "mammoth": "^1.9.0",
-    "multer": "^1.4.5-lts.1",
-    "nodemailer": "^6.9.16",
+    "multer": "^2.5.0",
     "pg": "^8.13.1"
   }
 }

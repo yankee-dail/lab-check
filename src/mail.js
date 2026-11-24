@@ -1,5 +1,3 @@
-import nodemailer from "nodemailer";
-
 const esc = (s) =>
   String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
 
@@ -112,7 +110,7 @@ export function buildReport({ attempt, lab, events }) {
 }
 
 export function mailConfigured() {
-  return Boolean(process.env.RESEND_API_KEY || process.env.SMTP_HOST);
+  return Boolean(process.env.RESEND_API_KEY);
 }
 
 /** attachments: [{name, data(Buffer)}] */
@@ -135,22 +133,5 @@ export async function sendMail({ to, subject, html, attachments = [] }) {
     return;
   }
 
-  if (process.env.SMTP_HOST) {
-    const transport = nodemailer.createTransport({
-      host: process.env.SMTP_HOST,
-      port: Number(process.env.SMTP_PORT || 465),
-      secure: Number(process.env.SMTP_PORT || 465) === 465,
-      auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
-    });
-    await transport.sendMail({
-      from: process.env.MAIL_FROM || process.env.SMTP_USER,
-      to,
-      subject,
-      html,
-      attachments: attachments.map((a) => ({ filename: a.name, content: Buffer.from(a.data) })),
-    });
-    return;
-  }
-
-  throw new Error("Пошта не налаштована (RESEND_API_KEY або SMTP_HOST)");
+  throw new Error("Пошта не налаштована (RESEND_API_KEY)");
 }

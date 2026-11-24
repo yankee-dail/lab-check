@@ -213,7 +213,7 @@ function publicState(a) {
   const total = a.questions?.length || a.question_count;
   return {
     status: a.status,
-    error: a.status === "failed" ? a.error : undefined,
+    error: a.status === "failed" ? "Не вдалося скласти тест по цих файлах. Спробуйте ще раз або зверніться до викладача." : undefined,
     labTitle: a.lab_title,
     studentName: a.student_name,
     total,

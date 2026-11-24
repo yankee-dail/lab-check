@@ -25,7 +25,6 @@
 | `TEACHER_EMAIL` | куди надсилати звіти (можна кілька через кому) |
 | `RESEND_API_KEY` | ключ [Resend](https://resend.com) для відправки листів |
 | `MAIL_FROM` | відправник, за замовчуванням `Lab Check <onboarding@resend.dev>` |
-| `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS` | альтернатива Resend (на Railway SMTP доступний лише на платних планах) |
 
 Без верифікованого домену Resend надсилає листи лише на адресу, з якою зареєстровано акаунт, тож зареєструйтеся на ту ж пошту, що й `TEACHER_EMAIL`.
 

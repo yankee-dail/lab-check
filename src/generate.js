@@ -84,17 +84,25 @@ export async function generateQuestions({ labTitle, labDescription, lecture, sub
     text: `<submission>\n${submission.text || "(текстових файлів немає, див. PDF)"}\n</submission>\n\nСклади рівно ${count} питань за правилами.`,
   });
 
-  const stream = client.beta.messages.stream({
+  const params = {
     model: MODEL,
     max_tokens: 32000,
-    betas: ["server-side-fallback-2026-07-01"],
-    fallbacks: "default",
     thinking: { type: "adaptive" },
     output_config: { effort: "medium", format: { type: "json_schema", schema: SCHEMA } },
     system: SYSTEM,
     messages: [{ role: "user", content: [...lectureBlocks, ...submissionBlocks] }],
-  });
-  const msg = await stream.finalMessage();
+  };
+  let msg;
+  try {
+    msg = await client.beta.messages
+      .stream({ ...params, betas: ["server-side-fallback-2026-07-01"], fallbacks: "default" })
+      .finalMessage();
+  } catch (err) {
+    // if the account/model rejects the fallback option, retry plain
+    if (!(err instanceof Anthropic.BadRequestError)) throw err;
+    console.warn("retrying without fallbacks:", err.message);
+    msg = await client.messages.stream(params).finalMessage();
+  }
 
   if (msg.stop_reason === "refusal") throw new Error("Генерацію питань відхилено. Спробуйте інші файли.");
   if (msg.stop_reason === "max_tokens") throw new Error("Відповідь генератора обрізана");
