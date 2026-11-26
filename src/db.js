@@ -84,5 +84,8 @@ export async function migrate() {
       at TIMESTAMPTZ NOT NULL DEFAULT now()
     );
     CREATE INDEX IF NOT EXISTS events_attempt_idx ON events(attempt_id);
+
+    ALTER TABLE attempts ADD COLUMN IF NOT EXISTS student_email TEXT NOT NULL DEFAULT '';
+    ALTER TABLE attempts ADD COLUMN IF NOT EXISTS student_email_status TEXT;
   `);
 }

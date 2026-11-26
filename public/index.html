@@ -32,6 +32,10 @@
         </div>
       </div>
 
+      <label for="email">Email</label>
+      <input type="email" id="email" required maxlength="200" autocomplete="email" placeholder="student@example.com">
+      <p class="muted small" style="margin-top:6px">Сюди прийде результат тестування.</p>
+
       <label>Файли роботи</label>
       <div class="drop" id="drop">
         Перетягни сюди файли або <b>натисни, щоб вибрати</b><br>
@@ -87,7 +91,8 @@
         <li>${l.question_count} питань з 4 варіантами, по <b>${l.seconds_per_question} секунд</b> на кожне. Повернутися назад не можна.</li>
         <li>Тест проходить лише у <b>повноекранному режимі</b>.</li>
         <li>Перехід на іншу вкладку, вікно чи вихід із повноекранного режиму — порушення. Після <b>${l.max_violations}</b> порушень тест закривається.</li>
-        <li>Копіювати текст сторінки не можна. Результат і журнал дій надсилаються викладачу.</li>`;
+        <li>Під час тесту працюють лише клавіші відповідей 1–4. Гарячі клавіші асистентів (Gemini, Siri, ChatGPT, Spotlight) — порушення.</li>
+        <li>Копіювати текст сторінки не можна. Результат і журнал дій надсилаються викладачу, результат — також тобі на email.</li>`;
     }
   }
   $("lab").addEventListener("change", showLab);
@@ -120,6 +125,7 @@
     fd.append("labId", $("lab").value);
     fd.append("name", $("name").value);
     fd.append("group", $("group").value);
+    fd.append("email", $("email").value);
     files.forEach(f => fd.append("files", f, f.name));
     $("submit").disabled = true;
     $("submit").textContent = "Завантаження…";

@@ -188,11 +188,11 @@
           .map((a) => {
             const [st, cls] = STATUS[a.status] || [a.status, ""];
             return `<tr class="click" data-id="${a.id}">
-            <td>${esc(a.student_name)}</td><td>${esc(a.student_group)}</td><td>${esc(a.lab_title)}</td>
+            <td>${esc(a.student_name)}<div class="small muted">${esc(a.student_email || "")}</div></td><td>${esc(a.student_group)}</td><td>${esc(a.lab_title)}</td>
             <td><b>${a.score ?? "—"}</b>${a.total ? " / " + a.total : ""}</td>
             <td>${a.violations ? `<span class="pill warn">${a.violations}</span>` : "0"}</td>
             <td><span class="pill ${cls}">${st}</span></td>
-            <td class="small muted">${esc(a.email_status || "")}</td>
+            <td class="small muted">викл.: ${esc(a.email_status || "—")}${a.student_email ? `<br>студ.: ${esc(a.student_email_status || "—")}` : ""}</td>
             <td class="small">${dt(a.created_at)}</td></tr>
             <tr hidden id="detail-${a.id}"><td colspan="8"></td></tr>`;
           })
@@ -204,8 +204,8 @@
     };
     $("refresh").onclick = renderAttempts;
     $("csv").onclick = () => {
-      const rows = [["Студент", "Група", "Лабораторна", "Бал", "З", "Порушення", "Статус", "Дата"]].concat(
-        list.map((a) => [a.student_name, a.student_group, a.lab_title, a.score ?? "", a.total, a.violations, (STATUS[a.status] || [a.status])[0], dt(a.created_at)]),
+      const rows = [["Студент", "Група", "Email", "Лабораторна", "Бал", "З", "Порушення", "Статус", "Дата"]].concat(
+        list.map((a) => [a.student_name, a.student_group, a.student_email, a.lab_title, a.score ?? "", a.total, a.violations, (STATUS[a.status] || [a.status])[0], dt(a.created_at)]),
       );
       const csv = "﻿" + rows.map((r) => r.map((v) => `"${String(v ?? "").replace(/"/g, '""')}"`).join(";")).join("\n");
       const a = document.createElement("a");
@@ -221,7 +221,7 @@
     fullscreen_enter: "Повернувся в повноекранний", copy_attempt: "Спроба копіювання", paste_attempt: "Спроба вставлення",
     context_menu: "Права кнопка", devtools_key: "Інструменти розробника", print_attempt: "Друк / збереження", printscreen_key: "PrintScreen",
     select_all: "Виділити все", resize: "Зміна розміру вікна", reload: "Перезавантаження сторінки", timeout: "Час вичерпано",
-    started: "Розпочато", finished: "Завершено", terminated: "Закрито (ліміт порушень)", abandoned: "Покинуто",
+    started: "Розпочато", assistant_hotkey: "Гаряча клавіша асистента", key_press: "Сторонні клавіші", finished: "Завершено", terminated: "Закрито (ліміт порушень)", abandoned: "Покинуто",
   };
 
   async function toggleDetail(id) {
@@ -254,7 +254,7 @@
         <button class="btn danger small" data-delattempt="${a.id}">Видалити спробу (дозволить перездати)</button>
       </div>
       ${a.error ? `<p class="error">${esc(a.error)}</p>` : ""}
-      <p class="small muted">${esc(a.submission_note)} · IP ${esc(a.ip)} · ${esc(a.user_agent)}</p>
+      <p class="small muted">${a.student_email ? `Email: ${esc(a.student_email)} (лист: ${esc(a.student_email_status || "—")}) · ` : ""}${esc(a.submission_note)} · IP ${esc(a.ip)} · ${esc(a.user_agent)}</p>
       <div class="row"><div><h2>Питання</h2><ol style="padding-left:18px">${qs || "<li class='muted'>Немає</li>"}</ol></div>
       <div><h2>Журнал дій</h2><table class="list">${evs || "<tr><td class='muted'>Подій немає</td></tr>"}</table></div></div>
     </div>`;

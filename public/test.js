@@ -41,10 +41,13 @@
   window.guardReport = (type, detail) => testRunning && report(type, detail);
 
   document.addEventListener("visibilitychange", () => {
-    if (testRunning && document.visibilityState === "hidden") report("tab_hidden", "Сторінку приховано");
+    if (testRunning && document.visibilityState === "hidden") report("tab_hidden", "Сторінку приховано" + keyContext());
   });
   window.addEventListener("blur", () => {
-    if (testRunning) report("window_blur", "Фокус перейшов в інше вікно/програму");
+    if (!testRunning) return;
+    const ctx = keyContext();
+    if (ctx && lastKey.modOnly) report("assistant_hotkey", `Вікно втратило фокус${ctx} (схоже на виклик асистента)`);
+    report("window_blur", "Фокус перейшов в інше вікно/програму" + ctx);
   });
   document.addEventListener("fullscreenchange", () => {
     if (!testRunning) return;
@@ -296,11 +299,109 @@
     tick = setInterval(step, 200);
   }
 
-  document.addEventListener("keydown", (e) => {
-    if (!testRunning || !current || answering) return;
-    const n = Number(e.key);
-    if (n >= 1 && n <= 4) answer(n - 1);
-  });
+  // ---------- keyboard control ----------
+  // Only 1–4 are expected during the test. Global assistant shortcuts (Gemini/ChatGPT Option+Space,
+  // Spotlight/Raycast Cmd+Space, Siri / Apple Intelligence double Cmd, double Option, Copilot key…)
+  // are handled by the OS, so the page often sees just the modifier press followed by a focus loss.
+  const MOD_NAMES = { Meta: "⌘ Cmd/Win", Alt: "⌥ Option/Alt", Control: "Ctrl", Shift: "Shift" };
+  const isMac = /Mac/i.test(navigator.platform || navigator.userAgent);
+  let lastKey = null; // {combo, at, modOnly}
+  let lastMod = null; // {key, at, clean}
+  let keyBuffer = [];
+  let keyFlush = null;
+
+  function keyName(e) {
+    if (MOD_NAMES[e.key]) return MOD_NAMES[e.key];
+    const c = e.code || "";
+    if (c === "Space") return "Space";
+    if (c.startsWith("Key")) return c.slice(3);
+    if (c.startsWith("Digit")) return c.slice(5);
+    if (c.startsWith("Numpad")) return "Num" + c.slice(6);
+    return e.key && e.key.length === 1 ? e.key.toUpperCase() : e.key || c || "?";
+  }
+  function comboName(e) {
+    const parts = [];
+    if (e.metaKey && e.key !== "Meta") parts.push(isMac ? "⌘ Cmd" : "Win");
+    if (e.ctrlKey && e.key !== "Control") parts.push("Ctrl");
+    if (e.altKey && e.key !== "Alt") parts.push(isMac ? "⌥ Option" : "Alt");
+    if (e.shiftKey && e.key !== "Shift") parts.push("Shift");
+    parts.push(keyName(e));
+    return parts.join(" + ");
+  }
+  function isAssistantHotkey(e) {
+    const mod = e.metaKey || e.altKey || e.ctrlKey;
+    if (e.code === "Space" && mod) return true; // Option/Alt+Space, Cmd+Space, Ctrl+Space, Cmd+Shift+Space…
+    if (e.key === "F23" || e.key === "F24" || e.code === "F23") return true; // Copilot key
+    if (!isMac && e.metaKey && ["KeyC", "KeyH", "KeyS"].includes(e.code)) return true; // Win+C/H/S
+    if (e.key === "Fn" || e.key === "FnLock" || e.code === "Fn") return true; // Globe/Fn – dictation
+    return false;
+  }
+  function bufferKey(combo) {
+    keyBuffer.push(combo);
+    if (!keyFlush) {
+      keyFlush = setTimeout(() => {
+        const list = keyBuffer.slice(0, 20).join(", ") + (keyBuffer.length > 20 ? ` … (+${keyBuffer.length - 20})` : "");
+        keyBuffer = [];
+        keyFlush = null;
+        report("key_press", list);
+      }, 3000);
+    }
+  }
+
+  document.addEventListener(
+    "keydown",
+    (e) => {
+      if (!testRunning) return;
+      const n = Number(e.key);
+      const plainDigit = n >= 1 && n <= 4 && !e.metaKey && !e.ctrlKey && !e.altKey;
+      if (plainDigit) {
+        lastMod = null;
+        if (current && !answering && !e.repeat) answer(n - 1);
+        return;
+      }
+      if (e.key !== "Escape") e.preventDefault(); // Escape can't be blocked and is caught as fullscreen exit
+      if (e.repeat) return;
+
+      const combo = comboName(e);
+      const now = Date.now();
+      const modOnly = Boolean(MOD_NAMES[e.key]);
+      lastKey = { combo, at: now, modOnly };
+
+      if (modOnly) {
+        // double tap of the same modifier: Siri / Apple Intelligence (⌘⌘), assistant apps (⌥⌥, Ctrl Ctrl)
+        if (lastMod && lastMod.key === e.key && lastMod.clean && now - lastMod.at < 500) {
+          report("assistant_hotkey", `Подвійне натискання ${MOD_NAMES[e.key]}`);
+          lastMod = null;
+          return;
+        }
+        lastMod = { key: e.key, at: now, clean: true };
+        bufferKey(combo);
+        return;
+      }
+      lastMod = null;
+      if (isAssistantHotkey(e)) {
+        report("assistant_hotkey", combo);
+        return;
+      }
+      bufferKey(combo);
+    },
+    true,
+  );
+  document.addEventListener(
+    "keyup",
+    (e) => {
+      if (!testRunning) return;
+      // a modifier counts as "tapped" only if released quickly with nothing else pressed
+      if (lastMod && lastMod.key === e.key && Date.now() - lastMod.at > 400) lastMod.clean = false;
+    },
+    true,
+  );
+
+  // focus lost right after a key press — typical for a global hotkey that the page never sees fully
+  function keyContext() {
+    if (lastKey && Date.now() - lastKey.at < 1500) return ` одразу після натискання ${lastKey.combo}`;
+    return "";
+  }
 
   async function answer(choice) {
     if (answering || !current) return;

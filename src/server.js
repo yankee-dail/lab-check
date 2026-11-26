@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 import { pool, q, migrate } from "./db.js";
 import { extractFile, joinTexts } from "./extract.js";
 import { generateQuestions } from "./generate.js";
-import { buildReport, sendMail, mailConfigured } from "./mail.js";
+import { buildReport, buildStudentReport, sendMail, mailConfigured } from "./mail.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = process.env.PORT || 3000;
@@ -14,12 +14,14 @@ const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "";
 const TEACHER_EMAIL = process.env.TEACHER_EMAIL || "";
 const GRACE_MS = 3000; // network latency allowance per question
 const ABANDON_MINUTES = 10;
-const COUNTED = new Set(["tab_hidden", "window_blur", "fullscreen_exit"]);
+// assistant_hotkey: global shortcuts of desktop assistants (Option+Space, double Cmd/Option, …)
+const COUNTED = new Set(["tab_hidden", "window_blur", "fullscreen_exit", "assistant_hotkey"]);
 const LOGGED = new Set([
   ...COUNTED,
   "copy_attempt", "paste_attempt", "context_menu", "devtools_key", "print_attempt", "printscreen_key",
-  "select_all", "resize", "reload", "fullscreen_enter",
+  "select_all", "resize", "reload", "fullscreen_enter", "key_press",
 ]);
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
 const app = express();
 app.set("trust proxy", true);
@@ -77,7 +79,9 @@ app.post(
     const labId = Number(req.body.labId);
     const name = String(req.body.name || "").trim().slice(0, 120);
     const group = String(req.body.group || "").trim().slice(0, 40);
+    const email = String(req.body.email || "").trim().toLowerCase().slice(0, 200);
     if (!name || name.split(/\s+/).length < 2) throw httpError(400, "Вкажіть прізвище та ім'я");
+    if (!EMAIL_RE.test(email)) throw httpError(400, "Вкажіть коректний email — на нього прийде результат");
     if (!req.files?.length) throw httpError(400, "Додайте файли лабораторної");
     if (!rateLimit(req.ip)) throw httpError(429, "Забагато спроб з цього пристрою. Спробуйте пізніше.");
 
@@ -103,9 +107,9 @@ app.post(
 
     const token = crypto.randomBytes(24).toString("base64url");
     const { rows } = await q(
-      `INSERT INTO attempts (token, lab_id, student_name, student_group, ip, user_agent, submission_note)
-       VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id`,
-      [token, lab.id, name, group, req.ip, String(req.get("user-agent") || "").slice(0, 300), noteParts.join("; ")],
+      `INSERT INTO attempts (token, lab_id, student_name, student_group, student_email, ip, user_agent, submission_note)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id`,
+      [token, lab.id, name, group, email, req.ip, String(req.get("user-agent") || "").slice(0, 300), noteParts.join("; ")],
     );
     const attemptId = rows[0].id;
     for (const f of req.files) {
@@ -350,8 +354,25 @@ async function sendReport(attemptId) {
   const { rows: files } = await q(`SELECT name, data FROM attempt_files WHERE attempt_id=$1 ORDER BY id`, [attemptId]);
   const { subject, html } = buildReport({ attempt, lab: labs[0], events });
 
-  if (!TEACHER_EMAIL || !mailConfigured()) {
+  if (!mailConfigured()) {
     await q(`UPDATE attempts SET email_status=$2 WHERE id=$1`, [attemptId, "пошта не налаштована"]);
+    return;
+  }
+
+  // student copy: score and right/wrong per question, without the teacher's log or correct answers
+  if (attempt.student_email && !attempt.student_email_status?.startsWith("надіслано")) {
+    try {
+      const s = buildStudentReport({ attempt, lab: labs[0] });
+      await sendMail({ to: attempt.student_email, subject: s.subject, html: s.html });
+      await q(`UPDATE attempts SET student_email_status='надіслано' WHERE id=$1`, [attemptId]);
+    } catch (err) {
+      console.error("student mail failed", err);
+      await q(`UPDATE attempts SET student_email_status=$2 WHERE id=$1`, [attemptId, ("помилка: " + err.message).slice(0, 300)]);
+    }
+  }
+
+  if (!TEACHER_EMAIL) {
+    await q(`UPDATE attempts SET email_status=$2 WHERE id=$1`, [attemptId, "TEACHER_EMAIL не задано"]);
     return;
   }
   let total = 0;
@@ -504,7 +525,7 @@ app.get(
       where = "WHERE a.lab_id=$1";
     }
     const { rows } = await q(
-      `SELECT a.id, a.lab_id, l.title AS lab_title, a.student_name, a.student_group, a.status, a.score,
+      `SELECT a.id, a.lab_id, l.title AS lab_title, a.student_name, a.student_group, a.student_email, a.student_email_status, a.status, a.score,
         jsonb_array_length(COALESCE(a.questions,'[]'::jsonb)) AS total, a.violations, a.email_status, a.error,
         a.created_at, a.started_at, a.finished_at
        FROM attempts a JOIN labs l ON l.id=a.lab_id ${where} ORDER BY a.created_at DESC LIMIT 500`,
